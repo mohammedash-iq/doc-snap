@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Summarize — AI PDF Summarizer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,300..900;1,300..900&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Figtree', 'system-ui', 'sans-serif'] },
+          colors: {
+            apple: {
+              blue:   '#0071e3',
+              bluehov:'#0077ed',
+              gray:   '#f5f5f7',
+              dark:   '#1d1d1f',
+              mid:    '#6e6e73',
+              light:  '#fbfbfd',
+            }
+          },
+          animation: {
+            'fade-up':   'fadeUp 0.6s ease forwards',
+            'fade-in':   'fadeIn 0.4s ease forwards',
+            'shimmer':   'shimmer 1.8s infinite linear',
+            'spin-slow': 'spin 2s linear infinite',
+            'pulse-dot': 'pulseDot 1.4s ease-in-out infinite',
+          },
+          keyframes: {
+            fadeUp:   { '0%': { opacity: 0, transform: 'translateY(24px)' }, '100%': { opacity: 1, transform: 'translateY(0)' } },
+            fadeIn:   { '0%': { opacity: 0 }, '100%': { opacity: 1 } },
+            shimmer:  { '0%': { backgroundPosition: '-400px 0' }, '100%': { backgroundPosition: '400px 0' } },
+            pulseDot: { '0%,100%': { transform: 'scale(1)', opacity: 1 }, '50%': { transform: 'scale(1.3)', opacity: 0.6 } },
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    * { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+    body { background-color: #fbfbfd; }
+
+    /* Drag-over highlight */
+    .drop-zone.dragover { border-color: #0071e3 !important; background: #f0f7ff !important; }
+
+    /* Shimmer skeleton */
+    .skeleton {
+      background: linear-gradient(90deg, #e8e8ed 25%, #f5f5f7 50%, #e8e8ed 75%);
+      background-size: 800px 100%;
+      animation: shimmer 1.8s infinite linear;
+      border-radius: 8px;
+    }
+
+    /* Summary markdown render */
+    #summaryContent h1,#summaryContent h2,#summaryContent h3 { font-weight: 600; margin-top: 1.2em; margin-bottom: .4em; color: #1d1d1f; }
+    #summaryContent h1 { font-size: 1.25rem; }
+    #summaryContent h2 { font-size: 1.1rem; }
+    #summaryContent h3 { font-size: 1rem; }
+    #summaryContent p  { margin-bottom: .75em; color: #3a3a3c; line-height: 1.7; }
+    #summaryContent ul { list-style: disc; padding-left: 1.4em; margin-bottom: .75em; }
+    #summaryContent li { color: #3a3a3c; line-height: 1.7; margin-bottom: .2em; }
+    #summaryContent strong { font-weight: 600; color: #1d1d1f; }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #c7c7cc; border-radius: 99px; }
+
+    /* Glass nav */
+    nav { backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px); }
+
+    /* File input hidden */
+    #fileInput { display: none; }
+  </style>
+</head>
+
+<body class="font-sans text-apple-dark min-h-screen">
+
+  <!-- ─── Navigation ─── -->
+  <nav class="fixed top-0 left-0 right-0 z-50 bg-white/80 border-b border-black/5">
+    <div class="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <!-- Icon -->
+        <div class="w-7 h-7 rounded-lg bg-apple-blue flex items-center justify-center">
+          <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"
+              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+        </div>
+        <span class="font-semibold text-[15px] tracking-tight">Summarize</span>
+      </div>
+      <span class="text-[13px] text-apple-mid hidden sm:block">Powered by Gemini 2.5 Flash</span>
+    </div>
+  </nav>
+
+  <!-- ─── Hero ─── -->
+  <section class="pt-36 pb-12 px-6 text-center animate-fade-up">
+    <p class="text-[13px] font-medium tracking-widest text-apple-blue uppercase mb-4">AI-Powered</p>
+    <h1 class="text-5xl sm:text-6xl font-bold tracking-tight leading-tight text-apple-dark mb-4">
+      Understand any PDF.<br class="hidden sm:block"/>
+      <span class="text-apple-blue">Instantly.</span>
+    </h1>
+    <p class="text-[17px] text-apple-mid max-w-xl mx-auto leading-relaxed">
+      Drop in a document — research paper, contract, report — and get a clear,
+      intelligent summary in seconds.
+    </p>
+  </section>
+
+  <!-- ─── Main Card ─── -->
+  <main class="max-w-2xl mx-auto px-6 pb-24">
+
+    <!-- Upload Card -->
+    <div id="uploadCard" class="bg-white rounded-3xl shadow-sm border border-black/[0.06] overflow-hidden animate-fade-up" style="animation-delay:.1s;opacity:0">
+
+      <!-- Drop Zone -->
+      <div id="dropZone"
+           class="drop-zone m-4 rounded-2xl border-2 border-dashed border-gray-200 p-10 text-center cursor-pointer transition-all duration-200 hover:border-apple-blue hover:bg-blue-50/30"
+           onclick="document.getElementById('fileInput').click()"
+           ondragover="handleDragOver(event)"
+           ondragleave="handleDragLeave(event)"
+           ondrop="handleDrop(event)">
+
+        <input type="file" id="fileInput" accept=".pdf" onchange="handleFileSelect(event)" />
+
+        <div id="dropContent">
+          <!-- Upload icon -->
+          <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-apple-gray flex items-center justify-center">
+            <svg class="w-8 h-8 text-apple-mid" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6"
+                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+            </svg>
+          </div>
+          <p class="font-semibold text-[15px] text-apple-dark mb-1">Drop your PDF here</p>
+          <p class="text-[13px] text-apple-mid">or <span class="text-apple-blue font-medium">click to browse</span> · up to 32 MB</p>
+        </div>
+
+        <!-- Selected file info (hidden by default) -->
+        <div id="fileInfo" class="hidden">
+          <div class="w-14 h-14 mx-auto mb-3 rounded-xl bg-red-50 flex items-center justify-center">
+            <svg class="w-7 h-7 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+          </div>
+          <p id="fileName" class="font-semibold text-[15px] text-apple-dark mb-1 truncate px-4"></p>
+          <p id="fileSize" class="text-[13px] text-apple-mid mb-3"></p>
+          <button onclick="clearFile(event)"
+            class="text-[12px] text-apple-mid hover:text-apple-dark transition-colors underline">
+            Choose a different file
+          </button>
+        </div>
+      </div>
+
+      <!-- Options Row -->
+      <div class="px-6 pb-4">
+        <p class="text-[12px] font-medium text-apple-mid uppercase tracking-wider mb-3">Summary Length</p>
+        <div class="flex gap-2" id="lengthOptions">
+          <button onclick="setLength('short', this)"
+            class="length-btn flex-1 py-2 rounded-xl text-[13px] font-medium border border-black/10 text-apple-mid transition-all duration-150 hover:border-apple-blue hover:text-apple-blue">
+            Short
+          </button>
+          <button onclick="setLength('medium', this)"
+            class="length-btn flex-1 py-2 rounded-xl text-[13px] font-medium border bg-apple-blue text-white border-apple-blue transition-all duration-150"
+            data-active="true">
+            Medium
+          </button>
+          <button onclick="setLength('long', this)"
+            class="length-btn flex-1 py-2 rounded-xl text-[13px] font-medium border border-black/10 text-apple-mid transition-all duration-150 hover:border-apple-blue hover:text-apple-blue">
+            Detailed
+          </button>
+        </div>
+      </div>
+
+      <!-- Divider -->
+      <div class="h-px bg-black/[0.05] mx-6"></div>
+
+      <!-- Submit button -->
+      <div class="p-4">
+        <button id="submitBtn" onclick="summarize()"
+          class="w-full py-3 rounded-2xl bg-apple-blue text-white font-semibold text-[15px] transition-all duration-200 hover:bg-apple-bluehov active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+          disabled>
+          Summarize PDF
+        </button>
+      </div>
+    </div>
+
+    <!-- ─── Loading State ─── -->
+    <div id="loadingCard" class="hidden mt-6 bg-white rounded-3xl shadow-sm border border-black/[0.06] p-8">
+      <div class="flex items-center gap-4 mb-6">
+        <div class="relative w-10 h-10 flex-shrink-0">
+          <div class="w-10 h-10 rounded-full border-2 border-apple-gray animate-spin-slow border-t-apple-blue"></div>
+        </div>
+        <div>
+          <p class="font-semibold text-[15px]">Analyzing your document…</p>
+          <p class="text-[13px] text-apple-mid" id="loadingMsg">Reading document structure</p>
+        </div>
+      </div>
+      <!-- Skeleton lines -->
+      <div class="space-y-3">
+        <div class="skeleton h-4 w-3/4"></div>
+        <div class="skeleton h-4 w-full"></div>
+        <div class="skeleton h-4 w-5/6"></div>
+        <div class="skeleton h-4 w-2/3"></div>
+        <div class="skeleton h-4 w-full mt-4"></div>
+        <div class="skeleton h-4 w-4/5"></div>
+        <div class="skeleton h-4 w-3/4"></div>
+      </div>
+    </div>
+
+    <!-- ─── Result Card ─── -->
+    <div id="resultCard" class="hidden mt-6 animate-fade-up">
+      <!-- Result Header -->
+      <div class="bg-white rounded-3xl shadow-sm border border-black/[0.06] overflow-hidden">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-black/[0.05]">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center">
+              <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M5 13l4 4L19 7"/>
+              </svg>
+            </div>
+            <div>
+              <p class="font-semibold text-[14px]" id="resultFileName">Summary</p>
+              <p class="text-[12px] text-apple-mid">Generated with Gemini 2.5 Flash</p>
+            </div>
+          </div>
+          <button onclick="copyToClipboard()"
+            id="copyBtn"
+            class="flex items-center gap-1.5 text-[13px] font-medium text-apple-blue hover:text-apple-bluehov transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+            </svg>
+            Copy
+          </button>
+        </div>
+
+        <!-- Summary text -->
+        <div id="summaryContent" class="px-6 py-5 text-[14.5px] leading-7 text-[#3a3a3c] max-h-[520px] overflow-y-auto"></div>
+      </div>
+
+      <!-- Try again button -->
+      <button onclick="resetApp()"
+        class="w-full mt-4 py-3 rounded-2xl bg-apple-gray text-apple-dark font-semibold text-[15px] transition-all duration-200 hover:bg-gray-200 active:scale-[0.98]">
+        Summarize Another PDF
+      </button>
+    </div>
+
+    <!-- ─── Error Card ─── -->
+    <div id="errorCard" class="hidden mt-6 bg-white rounded-3xl shadow-sm border border-red-100 p-6 animate-fade-in">
+      <div class="flex gap-4">
+        <div class="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center flex-shrink-0">
+          <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+        </div>
+        <div>
+          <p class="font-semibold text-[15px] text-apple-dark mb-1">Something went wrong</p>
+          <p id="errorMsg" class="text-[13px] text-apple-mid leading-relaxed"></p>
+          <button onclick="resetApp()" class="mt-3 text-[13px] font-medium text-apple-blue hover:underline">Try again</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ─── Footer ─── -->
+  <footer class="border-t border-black/[0.06] py-8 px-6 text-center">
+    <p class="text-[12px] text-apple-mid">Built with Flask + Gemini 2.5 Flash · Your files are never stored</p>
+  </footer>
+
+  <script>
+    // ── State ──────────────────────────────────────
+    let selectedFile = null;
+    let selectedLength = 'medium';
+    let summaryText = '';
+
+    // ── Length Selection ───────────────────────────
+    function setLength(val, btn) {
+      selectedLength = val;
+      document.querySelectorAll('.length-btn').forEach(b => {
+        b.classList.remove('bg-apple-blue', 'text-white', 'border-apple-blue');
+        b.classList.add('border-black/10', 'text-apple-mid');
+      });
+      btn.classList.add('bg-apple-blue', 'text-white', 'border-apple-blue');
+      btn.classList.remove('border-black/10', 'text-apple-mid');
+    }
+
+    // ── File Handling ──────────────────────────────
+    function handleFileSelect(e) {
+      const file = e.target.files[0];
+      if (file) setFile(file);
+    }
+
+    function handleDragOver(e) {
+      e.preventDefault();
+      document.getElementById('dropZone').classList.add('dragover');
+    }
+
+    function handleDragLeave(e) {
+      document.getElementById('dropZone').classList.remove('dragover');
+    }
+
+    function handleDrop(e) {
+      e.preventDefault();
+      document.getElementById('dropZone').classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file && file.type === 'application/pdf') {
+        setFile(file);
+      } else {
+        showError('Please drop a PDF file.');
+      }
+    }
+
+    function setFile(file) {
+      selectedFile = file;
+      document.getElementById('dropContent').classList.add('hidden');
+      document.getElementById('fileInfo').classList.remove('hidden');
+      document.getElementById('fileName').textContent = file.name;
+      document.getElementById('fileSize').textContent = formatBytes(file.size);
+      document.getElementById('submitBtn').disabled = false;
+    }
+
+    function clearFile(e) {
+      e.stopPropagation();
+      selectedFile = null;
+      document.getElementById('fileInput').value = '';
+      document.getElementById('dropContent').classList.remove('hidden');
+      document.getElementById('fileInfo').classList.add('hidden');
+      document.getElementById('submitBtn').disabled = true;
+    }
+
+    function formatBytes(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    // ── Loading Messages ───────────────────────────
+    const loadingMessages = [
+      'Reading document structure…',
+      'Extracting key information…',
+      'Identifying main themes…',
+      'Crafting your summary…',
+    ];
+    let msgInterval;
+
+    function startLoadingCycle() {
+      let i = 0;
+      document.getElementById('loadingMsg').textContent = loadingMessages[0];
+      msgInterval = setInterval(() => {
+        i = (i + 1) % loadingMessages.length;
+        document.getElementById('loadingMsg').textContent = loadingMessages[i];
+      }, 2200);
+    }
+
+    function stopLoadingCycle() {
+      clearInterval(msgInterval);
+    }
+
+    // ── Summarize ──────────────────────────────────
+    async function summarize() {
+      if (!selectedFile) return;
+
+      // Show loading
+      hide('errorCard');
+      hide('resultCard');
+      show('loadingCard');
+      document.getElementById('submitBtn').disabled = true;
+      startLoadingCycle();
+
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      formData.append('length', selectedLength);
+
+      try {
+        const res = await fetch('/summarize', { method: 'POST', body: formData });
+        const data = await res.json();
+
+        stopLoadingCycle();
+        hide('loadingCard');
+
+        if (!res.ok || data.error) {
+          showError(data.error || 'An unexpected error occurred.');
+        } else {
+          summaryText = data.summary;
+          renderResult(data.summary, data.filename);
+        }
+      } catch (err) {
+        stopLoadingCycle();
+        hide('loadingCard');
+        showError('Could not connect to the server. Make sure Flask is running on port 5000.');
+      }
+
+      document.getElementById('submitBtn').disabled = false;
+    }
+
+    // ── Render Result ──────────────────────────────
+    function renderResult(markdown, filename) {
+      document.getElementById('resultFileName').textContent = filename || 'Summary';
+      document.getElementById('summaryContent').innerHTML = parseMarkdown(markdown);
+      show('resultCard');
+    }
+
+    // Minimal markdown parser
+    function parseMarkdown(md) {
+      return md
+        .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+        .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+        .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
+        .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')
+        .replace(/\n\n/g, '</p><p>')
+        .replace(/^(?!<[hul])/gm, '')
+        .split('\n').map(line => {
+          if (!line.startsWith('<')) return `<p>${line}</p>`;
+          return line;
+        }).join('');
+    }
+
+    // ── Copy ───────────────────────────────────────
+    async function copyToClipboard() {
+      try {
+        await navigator.clipboard.writeText(summaryText);
+        const btn = document.getElementById('copyBtn');
+        btn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M5 13l4 4L19 7"/></svg> Copied!`;
+        setTimeout(() => {
+          btn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg> Copy`;
+        }, 2000);
+      } catch { /* silent */ }
+    }
+
+    // ── Reset ──────────────────────────────────────
+    function resetApp() {
+      hide('resultCard');
+      hide('errorCard');
+      hide('loadingCard');
+      clearFile({ stopPropagation: () => {} });
+      summaryText = '';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // ── Error ──────────────────────────────────────
+    function showError(msg) {
+      document.getElementById('errorMsg').textContent = msg;
+      show('errorCard');
+    }
+
+    // ── Helpers ────────────────────────────────────
+    function show(id) { document.getElementById(id).classList.remove('hidden'); }
+    function hide(id) { document.getElementById(id).classList.add('hidden'); }
+  </script>
+</body>
+</html>
